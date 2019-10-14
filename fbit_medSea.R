@@ -32,14 +32,14 @@ bargrid@data$MSFDhab <- tr$MSFD_predo
 
 #### Step 2 ####
 
-load(file = "cooSole.rData")
+load(file = "data/cooBio.rData")
 
 # get longevity categories seperate for each station 
-ID        <-rep(cooSole@data$H.Num,3)
-MSFD      <-rep(cooSole@data$MSFDhab,3)
-Cumb      <-c(cooSole@data$L1,(cooSole@data$L1+cooSole@data$L1_3),(cooSole@data$L1+cooSole@data$L1_3+cooSole@data$L3_10))
-Longevity <-c(rep(1,nrow(cooSole@data)),rep(3,nrow(cooSole@data)),rep(10,nrow(cooSole@data)))  
-Depth <-rep(cooSole@data$Depth,3)
+ID        <-rep(cooBio@data$H.Num,3)
+MSFD      <-rep(cooBio@data$MSFDhab,3)
+Cumb      <-c(cooBio@data$L1,(cooBio@data$L1+cooBio@data$L1_3),(cooBio@data$L1+cooBio@data$L1_3+cooBio@data$L3_10))
+Longevity <-c(rep(1,nrow(cooBio@data)),rep(3,nrow(cooBio@data)),rep(10,nrow(cooBio@data)))  
+Depth <-rep(cooBio@data$Depth,3)
 
 fulldat   <-data.frame(ID,MSFD,Cumb,Longevity, Depth) 
 fulldat$ll <-log(fulldat$Longevity)
@@ -48,24 +48,31 @@ fulldat$ll <-log(fulldat$Longevity)
 for (i in 1:(nrow(fulldat))){
   if (fulldat$Cumb[i] < 1e-3){ fulldat$Cumb[i] <- 1e-3}
   if (fulldat$Cumb[i] > 0.999){fulldat$Cumb[i] <- 0.999}
-}   
+}
+
+fulldat <- fulldat[-which(is.na(fulldat$MSFD)),]
 
 # fit a linear mixed model with sampling station as random factor and MSFD habitats as exploratory variable
 mod1   <-  glmer(Cumb ~ ll + MSFD*ll + Depth + (1 | ID), data=fulldat, family=binomial)
 mod2   <-  glmer(Cumb ~ ll + MSFD + Depth + (1 | ID), data=fulldat, family=binomial)
 mod3   <-  glmer(Cumb ~ ll + (1 | ID), data=fulldat, family=binomial)
-mod3   <-  glmer(Cumb ~ ll + Depth + (1 | ID), data=fulldat, family=binomial)
+mod4   <-  glmer(Cumb ~ ll + Depth + (1 | ID), data=fulldat, family=binomial)
+mod5   <-  glmer(Cumb ~ ll + Depth*ll + (1 | ID), data=fulldat, family=binomial)
+mod6   <-  glmer(Cumb ~ ll + MSFD + (1 | ID), data=fulldat, family=binomial)
+mod7   <-  glmer(Cumb ~ ll + MSFD*Depth + (1 | ID), data=fulldat, family=binomial)
+AIC(mod1, mod2, mod3, mod4, mod5, mod6, mod7)
 
 modGlm1   <-  glm(Cumb ~ ll + Depth, data=fulldat, family=binomial)
 modGlm2   <-  glm(Cumb ~ ll, data=fulldat, family=binomial)
 modGlm3   <-  glm(Cumb ~ ll + MSFD, data=fulldat, family=binomial)
 modGlm4   <-  glm(Cumb ~ ll + MSFD + Depth, data=fulldat, family=binomial)
 
-AIC(modGlm1,modGlm2,modGlm3, modGlm4)
+AIC(modGlm1, modGlm2, modGlm3, modGlm4)
 # models give a singular fit --> the random effect is very small (but you can argue that it, in principle, has to be included)
-modcoeff  <-  fixef(modGlm2)
 
-save(modcoeff, file="data/Coefficients_Bdata.RData") 
+modcoeff  <-  fixef(mod4)
+
+save(modcoeff,file="Coefficients_Bdata.RData") 
 
 
 
@@ -106,7 +113,6 @@ barClip@data$slope     <- slope
 
 #### Step 4 ####
 
-load(file = "data/region_grid_SAR.RData")
 
 Depl_TBB  <- 0.14 * barClip@data$TBB_SurfSAR   ### data from Hiddink et al. PNAS 2017 Table S4
 Depl_OT   <- 0.06 * barClip@data$OT_SurfSAR    ### data from Hiddink et al. PNAS 2017 Table S4
@@ -124,12 +130,17 @@ for(j in 1:nrow(barClip)){
 
 barClip@data$state <- state
 
+# plot state as a function of total depletion
 plot(barClip@data$state~barClip@data$Depl_tot, 
      ylab="State (PD model)", xlab="Depletion (SAR*d)",las=1)
 
-outmap <- map_plot(barClip,"state",purples)
+map_plot(barClip,"state",purples)
 
 aggregate(TBB_SurfSAR ~ MSFDhab,
+          data = barClip@data, mean)
+
+# estimate state per MSFD habitat
+aggregate(state ~ MSFDhab,
           data = barClip@data, mean)
 
 
